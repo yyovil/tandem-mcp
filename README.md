@@ -93,7 +93,7 @@ go build -v .
 
 ### Dependencies
 
-- `github.com/mark3labs/mcp-go` - MCP protocol implementation
+- `github.com/modelcontextprotocol/go-sdk` - Official MCP protocol implementation
 - `github.com/docker/docker` - Docker client SDK
 
 ## How It Works

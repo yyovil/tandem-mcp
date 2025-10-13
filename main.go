@@ -10,68 +10,43 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
-	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+// TerminalArgs defines the input parameters for the terminal tool
+type TerminalArgs struct {
+	Command  string   `json:"command" jsonschema:"The command to execute,required"`
+	Argument []string `json:"argument,omitempty" jsonschema:"Arguments for the command"`
+}
 
 func main() {
 	// Create MCP server
-	mcpServer := server.NewMCPServer(
-		"tandem-mcp",
-		"1.0.0",
-		server.WithToolCapabilities(true),
-	)
+	server := mcp.NewServer(&mcp.Implementation{
+		Name:    "tandem-mcp",
+		Version: "1.0.0",
+	}, nil)
 
 	// Register terminal tool
-	terminalTool := mcp.NewTool("terminal",
-		mcp.WithDescription("Execute commands in a Docker container"),
-		mcp.WithString("command",
-			mcp.Description("The command to execute"),
-			mcp.Required(),
-		),
-		mcp.WithArray("argument",
-			mcp.Description("Arguments for the command"),
-			mcp.Items(map[string]interface{}{
-				"type": "string",
-			}),
-		),
-	)
-
-	// Add tool handler
-	mcpServer.AddTool(terminalTool, executeTerminalCommand)
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "terminal",
+		Description: "Execute commands in a Docker container",
+	}, executeTerminalCommand)
 
 	// Start server with stdio transport
-	if err := server.ServeStdio(mcpServer); err != nil {
+	if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
 		log.Fatalf("Server error: %v", err)
 	}
 }
 
-func executeTerminalCommand(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	// Extract command from arguments
-	command := request.GetString("command", "")
-	if command == "" {
+func executeTerminalCommand(ctx context.Context, request *mcp.CallToolRequest, args TerminalArgs) (*mcp.CallToolResult, any, error) {
+	// Validate command
+	if args.Command == "" {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				mcp.TextContent{
-					Type: "text",
-					Text: "Error: command parameter is required and must be a string",
-				},
+				&mcp.TextContent{Text: "Error: command parameter is required and must be a string"},
 			},
 			IsError: true,
-		}, nil
-	}
-
-	// Extract arguments (optional)
-	var args []string
-	arguments := request.GetArguments()
-	if argsInterface, exists := arguments["argument"]; exists {
-		if argsList, ok := argsInterface.([]interface{}); ok {
-			for _, arg := range argsList {
-				if argStr, ok := arg.(string); ok {
-					args = append(args, argStr)
-				}
-			}
-		}
+		}, nil, nil
 	}
 
 	// Create Docker client
@@ -79,19 +54,16 @@ func executeTerminalCommand(ctx context.Context, request mcp.CallToolRequest) (*
 	if err != nil {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				mcp.TextContent{
-					Type: "text",
-					Text: fmt.Sprintf("Failed to create Docker client: %v", err),
-				},
+				&mcp.TextContent{Text: fmt.Sprintf("Failed to create Docker client: %v", err)},
 			},
 			IsError: true,
-		}, nil
+		}, nil, nil
 	}
 	defer cli.Close()
 
 	// Pull kali:headless image if not present
 	imageName := "kalilinux/kali-rolling:latest"
-	
+
 	// Check if image exists
 	_, _, err = cli.ImageInspectWithRaw(ctx, imageName)
 	if err != nil {
@@ -101,13 +73,10 @@ func executeTerminalCommand(ctx context.Context, request mcp.CallToolRequest) (*
 		if err != nil {
 			return &mcp.CallToolResult{
 				Content: []mcp.Content{
-					mcp.TextContent{
-						Type: "text",
-						Text: fmt.Sprintf("Failed to pull image: %v", err),
-					},
+					&mcp.TextContent{Text: fmt.Sprintf("Failed to pull image: %v", err)},
 				},
 				IsError: true,
-			}, nil
+			}, nil, nil
 		}
 		defer reader.Close()
 		// Wait for pull to complete
@@ -115,7 +84,7 @@ func executeTerminalCommand(ctx context.Context, request mcp.CallToolRequest) (*
 	}
 
 	// Build command with arguments
-	cmdWithArgs := append([]string{command}, args...)
+	cmdWithArgs := append([]string{args.Command}, args.Argument...)
 
 	// Create container
 	resp, err := cli.ContainerCreate(ctx, &container.Config{
@@ -126,13 +95,10 @@ func executeTerminalCommand(ctx context.Context, request mcp.CallToolRequest) (*
 	if err != nil {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				mcp.TextContent{
-					Type: "text",
-					Text: fmt.Sprintf("Failed to create container: %v", err),
-				},
+				&mcp.TextContent{Text: fmt.Sprintf("Failed to create container: %v", err)},
 			},
 			IsError: true,
-		}, nil
+		}, nil, nil
 	}
 
 	// Ensure cleanup
@@ -146,13 +112,10 @@ func executeTerminalCommand(ctx context.Context, request mcp.CallToolRequest) (*
 	if err := cli.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				mcp.TextContent{
-					Type: "text",
-					Text: fmt.Sprintf("Failed to start container: %v", err),
-				},
+				&mcp.TextContent{Text: fmt.Sprintf("Failed to start container: %v", err)},
 			},
 			IsError: true,
-		}, nil
+		}, nil, nil
 	}
 
 	// Wait for container to finish
@@ -162,13 +125,10 @@ func executeTerminalCommand(ctx context.Context, request mcp.CallToolRequest) (*
 		if err != nil {
 			return &mcp.CallToolResult{
 				Content: []mcp.Content{
-					mcp.TextContent{
-						Type: "text",
-						Text: fmt.Sprintf("Error waiting for container: %v", err),
-					},
+					&mcp.TextContent{Text: fmt.Sprintf("Error waiting for container: %v", err)},
 				},
 				IsError: true,
-			}, nil
+			}, nil, nil
 		}
 	case <-statusCh:
 	}
@@ -178,13 +138,10 @@ func executeTerminalCommand(ctx context.Context, request mcp.CallToolRequest) (*
 	if err != nil {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				mcp.TextContent{
-					Type: "text",
-					Text: fmt.Sprintf("Failed to get container logs: %v", err),
-				},
+				&mcp.TextContent{Text: fmt.Sprintf("Failed to get container logs: %v", err)},
 			},
 			IsError: true,
-		}, nil
+		}, nil, nil
 	}
 	defer out.Close()
 
@@ -193,22 +150,16 @@ func executeTerminalCommand(ctx context.Context, request mcp.CallToolRequest) (*
 	if err != nil {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				mcp.TextContent{
-					Type: "text",
-					Text: fmt.Sprintf("Failed to read stdout: %v", err),
-				},
+				&mcp.TextContent{Text: fmt.Sprintf("Failed to read stdout: %v", err)},
 			},
 			IsError: true,
-		}, nil
+		}, nil, nil
 	}
 
 	// Return result
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
-			mcp.TextContent{
-				Type: "text",
-				Text: string(stdout),
-			},
+			&mcp.TextContent{Text: string(stdout)},
 		},
-	}, nil
+	}, nil, nil
 }
