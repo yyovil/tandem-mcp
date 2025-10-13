@@ -1,119 +1,120 @@
-# Go Project Template
+# Tandem MCP
 
-A minimal Go project template with Nix devShell and direnv integration, featuring automated initialization.
+An MCP (Model Context Protocol) server that provides a Docker-based terminal tool for executing commands in containers.
 
 ## Features
 
-- 🚀 Go 1.25.1 ready
-- ❄️ Nix flakes for reproducible development environment
-- 🔧 direnv for automatic environment loading
-- 📦 Pre-configured with essential Go tools (gopls, gotools, goreleaser)
-- 🤖 Automated initialization script for quick project setup
+- **MCP stdio transport protocol** - Implements the MCP protocol over stdio for seamless integration with MCP clients
+- **Docker-based terminal tool** - Execute commands in a Kali Linux Docker container
+- **Safe command execution** - Isolated execution environment using Docker containers
+- **Automatic cleanup** - Containers are automatically removed after command execution
 
 ## Prerequisites
 
-- [Nix](https://nixos.org/download.html) with flakes enabled
-- [direnv](https://direnv.net/)
-- [GitHub CLI](https://cli.github.com/) (`gh`) for automated repository creation
+- Go 1.25.1 or later
+- Docker installed and running
+- Docker daemon accessible (default: `/var/run/docker.sock`)
 
-### Enable Nix Flakes
-
-Add to `~/.config/nix/nix.conf` (or `/etc/nix/nix.conf`):
-
-```nix
-experimental-features = nix-command flakes
-```
-
-## Getting Started
-
-### 1. Use This Template
-
-Click the "Use this template" button on GitHub or clone this repository:
+## Installation
 
 ```bash
-git clone {yourRepoUrl}
-cd {yourProjectName}
-bash scripts/init.sh {yourModuleName}
+go build -o tandem-mcp .
 ```
 
-### 2. Verify Setup
+## Usage
+
+The server implements the MCP protocol and communicates via stdio. It's designed to be used by MCP clients.
+
+### Running the Server
 
 ```bash
-go list
+./tandem-mcp
 ```
 
-## Project Structure
+### Available Tools
 
+#### terminal
+
+Execute commands in a Docker container (kalilinux/kali-rolling:latest).
+
+**Parameters:**
+- `command` (string, required): The command to execute
+- `argument` (array of strings, optional): Arguments to pass to the command
+
+**Example Request:**
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "terminal",
+    "arguments": {
+      "command": "echo",
+      "argument": ["Hello", "World"]
+    }
+  },
+  "id": 1
+}
 ```
-.
-├── .envrc              # direnv configuration
-├── .gitignore          # Git ignore rules
-├── flake.nix           # Nix flake for development environment
-├── flake.lock          # Locked dependencies
-├── go.mod              # Go module file
-├── go.sum              # Go dependencies checksums
-├── main.go             # Main application file
-└── pkgs/               # Additional packages directory
+
+**Example Response:**
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "Hello World\n"
+      }
+    ]
+  },
+  "id": 1
+}
 ```
 
 ## Development
 
-### Available Tools
+### Project Structure
 
-The Nix development shell includes:
-
-- `go` - Go compiler and toolchain
-- `gopls` - Go language server
-- `gotools` - Additional Go tools
-- `goreleaser` - Release automation tool
+```
+.
+├── main.go             # Main application file with MCP server implementation
+├── go.mod              # Go module file
+├── go.sum              # Go dependencies checksums
+└── README.md           # This file
+```
 
 ### Building
 
 ```bash
-go build -o bin/app .
+go build -v .
 ```
 
-### Running
+### Dependencies
 
-```bash
-go run main.go
-```
+- `github.com/mark3labs/mcp-go` - MCP protocol implementation
+- `github.com/docker/docker` - Docker client SDK
 
-### Testing
+## How It Works
 
-```bash
-go test ./...
-```
+1. The server listens on stdio for MCP protocol messages
+2. When the `terminal` tool is called:
+   - Creates a Docker client connection
+   - Pulls the `kalilinux/kali-rolling:latest` image (if not already present)
+   - Creates a container with the specified command and arguments
+   - Starts the container and waits for it to complete
+   - Retrieves the stdout from the container logs
+   - Cleans up by removing the container
+   - Returns the stdout as the tool result
 
-## Environment Variables
+## Security Considerations
 
-The development environment sets:
-
-- `GOROOT` - Points to the Nix-managed Go installation
-- `GOPATH` - Set to `.go` in the project directory
-- `GOBIN` - Set to `.go/bin` for installed binaries
-- `PATH` - Updated to include `$GOPATH/bin`
-
-## Customization
-
-### Modifying the Nix Environment
-
-Edit `flake.nix` to add or remove packages in the `buildInputs` section:
-
-```nix
-buildInputs = with pkgs; [ 
-  go 
-  gopls 
-  gotools 
-  goreleaser
-  # Add more packages here
-];
-```
-
-## CI/CD
-
-This template is ready for GitHub Actions or other CI/CD pipelines. The Nix flake ensures consistent builds across different environments.
+- Commands are executed in isolated Docker containers
+- Each execution uses a fresh container that is removed after completion
+- The Docker daemon must be accessible to the server
+- Consider the security implications of pulling and running Docker images
 
 ## License
 
-Specify your license here.
+Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International
