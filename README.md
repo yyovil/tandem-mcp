@@ -1,6 +1,6 @@
 # Go Project Template
 
-A minimal Go project template with Nix devShell and direnv integration.
+A minimal Go project template with Nix devShell and direnv integration, featuring automated initialization.
 
 ## Features
 
@@ -8,11 +8,13 @@ A minimal Go project template with Nix devShell and direnv integration.
 - ❄️ Nix flakes for reproducible development environment
 - 🔧 direnv for automatic environment loading
 - 📦 Pre-configured with essential Go tools (gopls, gotools, goreleaser)
+- 🤖 Automated initialization script for quick project setup
 
 ## Prerequisites
 
 - [Nix](https://nixos.org/download.html) with flakes enabled
-- [direnv](https://direnv.net/) (optional but recommended)
+- [direnv](https://direnv.net/)
+- [GitHub CLI](https://cli.github.com/) (`gh`) for automated repository creation
 
 ### Enable Nix Flakes
 
@@ -29,38 +31,14 @@ experimental-features = nix-command flakes
 Click the "Use this template" button on GitHub or clone this repository:
 
 ```bash
-git clone <your-repo-url>
-cd <your-project-name>
+git clone {yourRepoUrl}
+cd {yourProjectName}
+bash scripts/init.sh {yourModuleName}
 ```
 
-### 2. Update Module Name
-
-Edit `go.mod` and replace the module path with your own:
-
-```go
-module github.com/YOUR_USERNAME/YOUR_PROJECT
-```
-
-### 3. Enter Development Environment
-
-#### With direnv (recommended):
+### 2. Verify Setup
 
 ```bash
-direnv allow
-```
-
-The environment will automatically load when you `cd` into the project directory.
-
-#### Without direnv:
-
-```bash
-nix develop
-```
-
-### 4. Verify Setup
-
-```bash
-go version
 go list
 ```
 
