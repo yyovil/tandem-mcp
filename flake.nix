@@ -21,6 +21,13 @@
             export GOPATH="$PWD/.go"
             export PATH="$GOPATH/bin:$PATH"
             export GOBIN="$GOPATH/bin"
+
+            # Docker setup moved to scripts/docker_setup.sh
+            if [ -x "$PWD/scripts/docker_setup.sh" ]; then
+              "$PWD/scripts/docker_setup.sh" || true
+            else
+              echo "🔧 Docker setup script not found or not executable: $PWD/scripts/docker_setup.sh"
+            fi
           '';
         };
       });
