@@ -2,11 +2,13 @@
 *.env
 .direnv
 scripts/test*.sh
+internal/tutorial
 
 # Binaries
 tandem-mcp
-YOUR_PROJECT
 *.exe
 *.dll
 *.so
 *.dylib
+
+kali/
