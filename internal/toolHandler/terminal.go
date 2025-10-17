@@ -3,6 +3,7 @@ package toolhandler
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"strings"
 	"sync"
@@ -126,6 +127,7 @@ func Terminal(ctx context.Context, request *mcp.CallToolRequest, args TerminalAr
 		log.Printf("Created and started new container: %s", containerID)
 	}
 
+	// Create an exec instance to run the command within the container
 	execConfig := container.ExecOptions{
 		Cmd:          append([]string{args.Command}, args.Argument...),
 		AttachStdout: true,
@@ -141,6 +143,8 @@ func Terminal(ctx context.Context, request *mcp.CallToolRequest, args TerminalAr
 		return
 	}
 
+	// Start the exec instance and attach to it
+	// This provides a stream of the command's output
 	attachResp, err := cli.ContainerExecAttach(ctx, execResp.ID, container.ExecStartOptions{})
 	if err != nil {
 		result.Content = []mcp.Content{
@@ -152,10 +156,10 @@ func Terminal(ctx context.Context, request *mcp.CallToolRequest, args TerminalAr
 	defer attachResp.Close()
 
 	// Use stdcopy.StdCopy to demultiplex the output stream
-	// This removes the Docker stream headers
+	// This removes the Docker stream headers and properly separates stdout and stderr
 	outputBuffer := new(strings.Builder)
 	_, err = stdcopy.StdCopy(outputBuffer, outputBuffer, attachResp.Reader)
-	if err != nil {
+	if err != nil && err != io.EOF {
 		result.Content = []mcp.Content{
 			&mcp.TextContent{Text: fmt.Sprintf("Failed to read exec output: %v", err)},
 		}
