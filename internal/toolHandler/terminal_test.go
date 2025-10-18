@@ -12,10 +12,10 @@ import (
 
 func TestTerminal(t *testing.T) {
 	tests := []struct {
-		name          string
-		command       string
-		args          []string
-		expectError   bool
+		name           string
+		command        string
+		args           []string
+		expectError    bool
 		validateOutput func(t *testing.T, output string)
 	}{
 		{
@@ -100,6 +100,80 @@ func TestTerminal(t *testing.T) {
 			tt.validateOutput(t, output)
 		})
 	}
+}
+
+// TestTerminal_StatePersistence verifies that shell state persists across multiple command calls
+func TestTerminal_StatePersistence(t *testing.T) {
+	ctx := context.Background()
+
+	// First, change directory to /tmp
+	result1, _, err := Terminal(ctx, &mcp.CallToolRequest{}, TerminalArgs{
+		Command:  "cd",
+		Argument: []string{"/tmp"},
+	})
+	if err != nil {
+		t.Fatalf("cd command failed: %v", err)
+	}
+	if result1.IsError {
+		t.Fatalf("cd returned error result: %+v", result1)
+	}
+
+	// Now check pwd - should be /tmp
+	result2, _, err := Terminal(ctx, &mcp.CallToolRequest{}, TerminalArgs{
+		Command: "pwd",
+	})
+	if err != nil {
+		t.Fatalf("pwd command failed: %v", err)
+	}
+	if result2.IsError {
+		t.Fatalf("pwd returned error result: %+v", result2)
+	}
+
+	textContent, ok := result2.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("content is not TextContent")
+	}
+
+	output := strings.TrimSpace(textContent.Text)
+	if output != "/tmp" {
+		t.Errorf("pwd after cd = %q, want %q (state did not persist!)", output, "/tmp")
+	}
+
+	// Test environment variable persistence
+	result3, _, err := Terminal(ctx, &mcp.CallToolRequest{}, TerminalArgs{
+		Command:  "export",
+		Argument: []string{"TEST_VAR=hello123"},
+	})
+	if err != nil {
+		t.Fatalf("export command failed: %v", err)
+	}
+	if result3.IsError {
+		t.Fatalf("export returned error result: %+v", result3)
+	}
+
+	// Check if the variable is set
+	result4, _, err := Terminal(ctx, &mcp.CallToolRequest{}, TerminalArgs{
+		Command:  "echo",
+		Argument: []string{"$TEST_VAR"},
+	})
+	if err != nil {
+		t.Fatalf("echo $TEST_VAR failed: %v", err)
+	}
+	if result4.IsError {
+		t.Fatalf("echo returned error result: %+v", result4)
+	}
+
+	textContent2, ok := result4.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("content is not TextContent")
+	}
+
+	envOutput := strings.TrimSpace(textContent2.Text)
+	if envOutput != "hello123" {
+		t.Errorf("echo $TEST_VAR = %q, want %q (environment variable did not persist!)", envOutput, "hello123")
+	}
+
+	t.Log("✓ State persistence verified: cd and export work across multiple calls")
 }
 
 // TestTerminal_ContainerStates tests the Terminal function with containers in different states
