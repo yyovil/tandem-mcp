@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -e
 
 # Start a new tmux session named "pentest" with the first window named "agent"
 tmux new-session -d -s pentest -n agent
