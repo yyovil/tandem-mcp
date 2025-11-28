@@ -2,3 +2,16 @@
 *.env
 .direnv
 scripts/test*.sh
+internal/tutorial
+
+# Binaries
+tandem-mcp
+*.exe
+*.dll
+*.so
+*.dylib
+
+tmux*
+*PLAN.md
+
+.vscode/mcp.json
