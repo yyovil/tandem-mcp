@@ -11,4 +11,5 @@ tandem-mcp
 *.so
 *.dylib
 
-kali/
+tmux*
+*PLAN.md

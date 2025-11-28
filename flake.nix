@@ -14,7 +14,7 @@
         };
       in {
         devShells.default = pkgs.mkShell {
-          buildInputs = with pkgs; [ go gopls gotools goreleaser ];
+          buildInputs = with pkgs; [ go gopls gotools goreleaser charm-freeze];
 
           shellHook = ''
             export GOROOT="${pkgs.go}/share/go"

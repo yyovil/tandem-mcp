@@ -23,13 +23,13 @@ var (
 	dockerClientErr  error
 
 	// Attach session management - singleton per container
-	attachSession     *AttachSession
+	attachedSession     *AttachedSession
 	attachSessionLock sync.Mutex
 )
 
-type AttachSession struct {
+type AttachedSession struct {
 	containerID  string
-	attachResp   types.HijackedResponse
+	hijackedResp   types.HijackedResponse
 	cli          *client.Client
 	outputBuffer *SafeBuffer
 	outputStream chan string
@@ -72,23 +72,23 @@ func getDockerClient() (*client.Client, error) {
 }
 
 // getOrCreateAttachSession returns a persistent attach session to the container's shell
-func getOrCreateAttachSession(ctx context.Context, cli *client.Client, containerID string) (*AttachSession, error) {
+func getOrCreateAttachSession(ctx context.Context, cli *client.Client, containerID string) (*AttachedSession, error) {
 	attachSessionLock.Lock()
 	defer attachSessionLock.Unlock()
 
 	// Check if we already have a valid attach session for this container
-	if attachSession != nil && attachSession.containerID == containerID {
+	if attachedSession != nil && attachedSession.containerID == containerID {
 		// Verify container is still running
 		info, err := cli.ContainerInspect(ctx, containerID)
 		if err == nil && info.State.Running {
-			return attachSession, nil
+			return attachedSession, nil
 		}
 		// Container stopped or error, clean up
-		if attachSession.streamCancel != nil {
-			attachSession.streamCancel()
+		if attachedSession.streamCancel != nil {
+			attachedSession.streamCancel()
 		}
-		attachSession.attachResp.Close()
-		attachSession = nil
+		attachedSession.hijackedResp.Close()
+		attachedSession = nil
 	}
 
 	// Attach to the running container's stdin/stdout/stderr
@@ -109,9 +109,9 @@ func getOrCreateAttachSession(ctx context.Context, cli *client.Client, container
 	outputBuffer := &SafeBuffer{}
 	outputStream := make(chan string, 100)
 
-	session := &AttachSession{
+	session := &AttachedSession{
 		containerID:  containerID,
-		attachResp:   attachResp,
+		hijackedResp:   attachResp,
 		cli:          cli,
 		outputBuffer: outputBuffer,
 		outputStream: outputStream,
@@ -126,14 +126,14 @@ func getOrCreateAttachSession(ctx context.Context, cli *client.Client, container
 	time.Sleep(200 * time.Millisecond)
 	outputBuffer.Reset() // Clear any initial output
 
-	attachSession = session
+	attachedSession = session
 	log.Printf("Created attach session with streaming to container: %s", containerID)
-	return attachSession, nil
+	return attachedSession, nil
 }
 
 // beginOutputStream continuously reads from the container and writes to buffer
 // This mimics Docker CLI's approach
-func (s *AttachSession) beginOutputStream() {
+func (s *AttachedSession) beginOutputStream() {
 	defer close(s.outputStream)
 
 	buf := make([]byte, 4096)
@@ -143,7 +143,7 @@ func (s *AttachSession) beginOutputStream() {
 			return
 		default:
 			// Read from container output (TTY mode - raw stream)
-			n, err := s.attachResp.Reader.Read(buf)
+			n, err := s.hijackedResp.Reader.Read(buf)
 			if n > 0 {
 				// Write to buffer
 				s.outputBuffer.Write(buf[:n])
@@ -231,13 +231,14 @@ func Terminal(ctx context.Context, request *mcp.CallToolRequest, args TerminalAr
 		log.Printf("Creating new Kali container")
 		var resp container.CreateResponse
 		resp, err = cli.ContainerCreate(ctx, &container.Config{
-			Image:      CONTAINER_IMAGE,
-			Cmd:        []string{"bash"},
-			Tty:        true,       // TTY for raw terminal output
-			OpenStdin:  true,       // Keep stdin open
-			StdinOnce:  false,      // Don't close stdin after first attach
-			Entrypoint: []string{}, // Use default entrypoint
-		}, nil, nil, nil, "")
+			Image:     CONTAINER_IMAGE,
+			Cmd:       []string{"bash"},
+			Tty:       true,
+			OpenStdin: true,
+			StdinOnce: false,
+		}, &container.HostConfig{
+			CapAdd: []string{"NET_ADMIN", "NET_RAW"},
+		}, nil, nil, "")
 		if err != nil {
 			result.Content = []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Failed to create container: %v", err)},
@@ -292,12 +293,12 @@ func Terminal(ctx context.Context, request *mcp.CallToolRequest, args TerminalAr
 }
 
 // executeCommand sends a command and waits for completion by detecting the prompt
-func (s *AttachSession) executeCommand(command string) (string, error) {
+func (s *AttachedSession) executeCommand(command string) (string, error) {
 	// Clear the output buffer before sending command
 	s.outputBuffer.Reset()
 
 	// Send command with newline (like Docker CLI sends input)
-	_, err := io.WriteString(s.attachResp.Conn, command+"\n")
+	_, err := io.WriteString(s.hijackedResp.Conn, command+"\n")
 	if err != nil {
 		return "", fmt.Errorf("failed to write command: %w", err)
 	}
