@@ -2,11 +2,11 @@
 
 # Capture commands from the 'agent' tmux window
 # Requires: tmux, awk, sed, freeze
-# Uses simple prompt marker: KALI# (set via entrypoint.sh)
+# Uses prompt marker: KALI[path]# (set via Dockerfile)
 # Usage: Source this script in the 'screenshotter' window, then call showLastNExecution <n>
 
 AGENT_WINDOW="agent"
-PROMPT_MARKER="KALI# "
+PROMPT_MARKER="KALI["
 
 # Capture last n command executions and generate an image
 # Parameters:
@@ -38,12 +38,12 @@ showLastNExecution() {
     local target="${session}:${AGENT_WINDOW}"
     local output_file="/tmp/last_${n}_cmds.png"
 
-    # Capture pane, extract last n commands using simple KALI# prompt, strip trailing whitespace, generate image
+    # Capture pane, extract last n commands using KALI[path]# prompt, strip trailing whitespace, generate image
     tmux capture-pane -pt "$target" -S - | \
-    awk -v N="$n" -v marker="KALI# " '
+    awk -v N="$n" '
         BEGIN { cmd_count=0; in_cmd=0; buffer=""; has_cmd=0 }
-        # Detect prompt line starting with KALI#
-        index($0, marker) == 1 {
+        # Detect prompt line matching KALI[...]# pattern
+        /^KALI\[.*\]#/ {
             # Store previous buffer if it had an actual command (not just bare prompt)
             if (in_cmd && has_cmd) {
                 cmds[cmd_count] = buffer
@@ -51,8 +51,8 @@ showLastNExecution() {
             }
             in_cmd = 1
             buffer = $0 "\n"
-            # Check if there is a command after "KALI# " (length > 6)
-            has_cmd = (length($0) > 6)
+            # Check if there is a command after the prompt (line continues after ]# )
+            has_cmd = (match($0, /\]# ./) > 0)
             next
         }
         in_cmd { buffer = buffer $0 "\n" }

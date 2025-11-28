@@ -8,4 +8,7 @@ var (
 
 	//go:embed terminal.md
 	Terminal string
+
+	//go:embed show_last_n_execution.md
+	ShowLastNExecution string
 )

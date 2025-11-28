@@ -13,7 +13,7 @@ RUN ARCH=$(dpkg --print-architecture) && \
     rm /tmp/freeze.deb
 
 # Set simple prompt for command tracking (append to bashrc so it overrides Kali defaults)
-RUN echo 'export PS1="KALI# "' >> /root/.bashrc
+RUN echo 'export PS1="KALI[\w]# "' >> /root/.bashrc
 
 COPY capture_cmds.sh /usr/local/bin/capture_cmds.sh
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh

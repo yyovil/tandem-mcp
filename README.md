@@ -9,11 +9,21 @@ An MCP (Model Context Protocol) server that provides a Docker-based terminal too
 
 ### Building
 
+#### Build the MCP server
+
 ```bash
 go build -v .
 ```
 
+#### Build the docker image
+
+```bash
+cd kali && docker build -t kali:headless .
+```
+
 ### Running the Server
+
+use this cmd when asked while adding a new MCP server to an agent of your choice.
 
 ```bash
 ./tandem-mcp
@@ -23,20 +33,11 @@ go build -v .
 
 #### terminal
 
-Executes a shell command in a Docker container (ghcr.io/yyovil/kali:headless).
+Executes a bash shell command in a Docker container (kali:headless).
 
-### Project Structure
+#### show_last_n_execution
 
-```text
-.
-├── main.go             # Main application file with MCP server implementation
-├── internal/
-│   ├── toolHandlers/   # Contains all tool handler implementations
-│   ├── prompts/        # Contains prompts used throughout the MCP server
-├── go.mod              # Go module file
-├── go.sum              # Go dependencies checksums
-└── README.md           # This file
-```
+Captures a screenshot of the last N command executions from the agent window, useful for seeing terminal state after timeouts or during interactive sessions.
 
 ## License
 

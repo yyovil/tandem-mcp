@@ -24,6 +24,12 @@ func main() {
 		Description: prompts.Terminal,
 	}, toolhandler.Terminal)
 
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "ShowLastNExecution",
+		Title:       "Show Last N Executions",
+		Description: prompts.ShowLastNExecution,
+	}, toolhandler.ShowLastNExecution)
+
 	if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
 		log.Fatalf("Server error: %v", err)
 	}
