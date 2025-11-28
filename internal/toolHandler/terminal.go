@@ -3,7 +3,6 @@ package toolhandler
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"fmt"
 	"io"
 	"log"
@@ -107,13 +106,13 @@ func Terminal(ctx context.Context, request *mcp.CallToolRequest, args TerminalAr
 	}
 
 	// Return appropriate content based on result type
-	if cmdResult.ImageData != "" {
+	if cmdResult.ImageData != nil {
 		// Command timed out - return image of terminal state
 		result.Content = []mcp.Content{
 			&mcp.TextContent{Text: "[TIMEOUT] Command did not complete within 2 minutes. Terminal state captured below. Use 'showLastNExecution N' to see more history."},
 			&mcp.ImageContent{
 				MIMEType: "image/png",
-				Data:     []byte(cmdResult.ImageData),
+				Data:     cmdResult.ImageData,
 			},
 		}
 	} else {
@@ -278,7 +277,7 @@ func (s *AttachedSession) Close() {
 // CommandResult holds the result of command execution
 type CommandResult struct {
 	Text      string // Text output (if completed within timeout)
-	ImageData string // Base64 encoded PNG (if timed out)
+	ImageData []byte // Raw PNG data (if timed out)
 	TimedOut  bool   // Whether the command timed out
 }
 
@@ -444,7 +443,7 @@ func capturePaneContent(ctx context.Context, cli *client.Client, containerID str
 
 // captureVisualState captures the terminal visual state using the screenshotter window
 // This uses docker exec with tmux send-keys (only for screenshotter, not agent)
-func captureVisualState(ctx context.Context, cli *client.Client, containerID string, n int) (string, error) {
+func captureVisualState(ctx context.Context, cli *client.Client, containerID string, n int) ([]byte, error) {
 	// Execute showLastNExecution in the screenshotter tmux window
 	captureCmd := fmt.Sprintf("showLastNExecution %d", n)
 
@@ -458,12 +457,12 @@ func captureVisualState(ctx context.Context, cli *client.Client, containerID str
 
 	execID, err := cli.ContainerExecCreate(ctx, containerID, execConfig)
 	if err != nil {
-		return "", fmt.Errorf("failed to create exec for capture: %w", err)
+		return nil, fmt.Errorf("failed to create exec for capture: %w", err)
 	}
 
 	err = cli.ContainerExecStart(ctx, execID.ID, container.ExecStartOptions{})
 	if err != nil {
-		return "", fmt.Errorf("failed to start exec for capture: %w", err)
+		return nil, fmt.Errorf("failed to start exec for capture: %w", err)
 	}
 
 	// Wait for the screenshot to be generated
@@ -475,7 +474,7 @@ func captureVisualState(ctx context.Context, cli *client.Client, containerID str
 	// Use docker cp to get the file content
 	reader, _, err := cli.CopyFromContainer(ctx, containerID, imageFile)
 	if err != nil {
-		return "", fmt.Errorf("failed to copy image from container: %w", err)
+		return nil, fmt.Errorf("failed to copy image from container: %w", err)
 	}
 	defer reader.Close()
 
@@ -483,13 +482,13 @@ func captureVisualState(ctx context.Context, cli *client.Client, containerID str
 	var imageData bytes.Buffer
 	_, err = io.Copy(&imageData, reader)
 	if err != nil {
-		return "", fmt.Errorf("failed to read image data: %w", err)
+		return nil, fmt.Errorf("failed to read image data: %w", err)
 	}
 
 	// Extract PNG from tar
 	tarData := imageData.Bytes()
 	if len(tarData) <= 512 {
-		return "", fmt.Errorf("invalid tar data from container")
+		return nil, fmt.Errorf("invalid tar data from container")
 	}
 
 	// Find PNG start (PNG magic bytes: 0x89 0x50 0x4E 0x47)
@@ -501,14 +500,12 @@ func captureVisualState(ctx context.Context, cli *client.Client, containerID str
 		}
 	}
 	if pngStart == -1 {
-		return "", fmt.Errorf("PNG data not found in tar archive")
+		return nil, fmt.Errorf("PNG data not found in tar archive")
 	}
 
 	pngData := tarData[pngStart:]
 
-	// Base64 encode the image
-	base64Data := base64.StdEncoding.EncodeToString(pngData)
-	return base64Data, nil
+	return pngData, nil
 }
 
 // cleanOutput removes the command echo, ANSI codes, and bash prompts from the output

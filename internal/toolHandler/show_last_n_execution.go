@@ -55,7 +55,7 @@ func ShowLastNExecution(ctx context.Context, request *mcp.CallToolRequest, args 
 		&mcp.TextContent{Text: fmt.Sprintf("Screenshot of last %d command execution(s) from the agent window:", n)},
 		&mcp.ImageContent{
 			MIMEType: "image/png",
-			Data:     []byte(imageData),
+			Data:     imageData,
 		},
 	}
 
