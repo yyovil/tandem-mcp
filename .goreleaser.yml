@@ -21,7 +21,7 @@ builds:
     main: ./main.go
     binary: tandem-mcp
     ldflags:
-      - -s -w -X main.version={{.Version}}
+      - -s -w
 
 archives:
   - format: tar.gz
